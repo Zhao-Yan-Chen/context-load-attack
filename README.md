@@ -42,6 +42,7 @@ context-load-attack/
 │   ├── context_loader.py        # 上下文负载控制（核心）
 │   ├── mpbench_adapter.py       # MPBench 数据加载
 │   ├── injecagent_adapter.py    # InjecAgent 数据加载（替代数据集）
+│   ├── agentdojo_adapter.py     # AgentDojo 数据加载（替代数据集）
 │   ├── agent_runner.py          # Agent 运行器
 │   ├── evaluator.py             # ASR/RSR 计算
 │   └── experiment.py            # 实验编排
@@ -57,6 +58,10 @@ context-load-attack/
 │   │   ├── user_cases.jsonl
 │   │   ├── attacker_cases_dh.jsonl
 │   │   └── attacker_cases_ds.jsonl
+│   ├── agentdojo/               # AgentDojo 数据集（已内置）
+│   │   ├── injection_vectors/   # 注入载荷（workspace/banking/slack/travel）
+│   │   ├── user_tasks/          # 用户任务定义
+│   │   └── injection_tasks/     # 攻击者目标定义
 │   └── filler/                  # 良性填充内容（控制负载率）
 │       ├── documents.json
 │       └── code.json
@@ -124,7 +129,7 @@ python scripts/quick_test.py
 ### 3. 配置实验
 
 编辑 `config/experiment.json`，设置：
-- `data_source`：数据源（`injecagent` 或 `mpbench`）
+- `data_source`：数据源（`injecagent` / `agentdojo` / `mpbench`）
 - `data_dir`：数据目录
 - `agent_config.api_base`：LLM API 地址
 - `agent_config.model`：模型名称
@@ -139,6 +144,12 @@ python scripts/quick_test.py
 {
   "data_source": "injecagent",
   "data_dir": "data/injecagent"
+}
+
+// 使用 AgentDojo（已内置数据，4 个套件）
+{
+  "data_source": "agentdojo",
+  "data_dir": "data/agentdojo"
 }
 
 // 使用重建的 MPBench 测试用例
@@ -193,16 +204,26 @@ Indirect Prompt Injection (IPI) 基准测试，包含 17 个用户场景、30 �
 
 数据已内置在 `data/injecagent/` 目录中，无需额外下载。
 
-**与 MPBench 的差异**：
-| 维度 | MPBench | InjecAgent |
-|------|---------|------------|
-| 攻击范式 | 记忆投毒（写入+检索两阶段） | 间接提示注入（工具返回值注入） |
-| 攻击类型 | 6 类（强/弱信号） | Direct Harm / Data Stealing |
-| 数据状态 | 未开源 | 已开源，已内置 |
-| 适用场景 | 记忆持久化投毒 | 单次会话指令劫持 |
+### AgentDojo
 
-`src/injecagent_adapter.py` 将 InjecAgent 用例转换为统一的 `MPBenchCase` 格式，
-确保实验框架无需改动即可运行。
+[AgentDojo](https://github.com/ethz-spylab/agentdojo) 是一个动态环境 benchmark，包含
+4 个任务套件（workspace / banking / slack / travel），共 86 个用户任务、39 个注入载荷
+和 27 个攻击者目标，可组合生成 253 个测试用例。
+
+数据已内置在 `data/agentdojo/` 目录中。适配器通过 `ast` 解析任务定义文件中的
+`PROMPT`（用户任务）和 `GOAL`（攻击者目标），并将注入载荷包装为工具返回值。
+
+**与 MPBench / InjecAgent 的差异**：
+| 维度 | MPBench | InjecAgent | AgentDojo |
+|------|---------|------------|-----------|
+| 攻击范式 | 记忆投毒（写入+检索两阶段） | 间接提示注入（工具返回值注入） | 动态环境注入 |
+| 攻击类型 | 6 类（强/弱信号） | Direct Harm / Data Stealing | 按套件划分（email/calendar/drive/banking 等） |
+| 数据状态 | 未开源 | 已开源，已内置 | 已开源，已内置 |
+| 用例数 | 124（重建） | 1054 | 253 |
+| 适用场景 | 记忆持久化投毒 | 单次会话指令劫持 | 多轮工具交互中的注入 |
+
+`src/injecagent_adapter.py` 和 `src/agentdojo_adapter.py` 将对应数据集转换为统一的
+`MPBenchCase` 格式，确保实验框架无需改动即可运行。
 
 ### 重建的 MPBench 测试用例
 
@@ -218,7 +239,6 @@ Indirect Prompt Injection (IPI) 基准测试，包含 17 个用户场景、30 �
 ### 其他可选数据集
 
 以下开源数据集也可作为替代（需自行编写适配器）：
-- **AgentDojo**（github.com/ethz-spylab/agentdojo）：97 任务、629 安全用例，动态环境
 - **BIPIA**：首个 IPI 专用基准，250 个攻击者目标，5 种场景
 - **AutoDojo**（github.com/xhOwenMa/AutoDojo）：生成式 PI 防御基准
 
@@ -269,12 +289,15 @@ Indirect Prompt Injection (IPI) 基准测试，包含 17 个用户场景、30 �
 
 ## 局限性
 
-1. **数据集替代**：MPBench 官方数据未开源，默认使用 InjecAgent 替代。InjecAgent 侧重
-   间接提示注入（工具返回值劫持），与 MPBench 的记忆投毒范式存在差异，结论需谨慎外推。
-2. **重建数据**：`data/reconstructed/` 中的 MPBench 用例为根据论文描述重建，非官方数据
-3. **token 估算**：使用简单的字符/token 换算，非精确 tokenizer（可通过安装 tiktoken 改进）
-4. **判定方式**：默认使用子串匹配判定 ASR/RSR，非 LLM judge（可扩展）
-5. **单模型**：默认配置使用单一模型，跨模型验证需手动配置
+1. **数据集替代**：MPBench 官方数据未开源，提供 InjecAgent 和 AgentDojo 两种替代数据集。
+   InjecAgent 侧重间接提示注入（工具返回值劫持），AgentDojo 侧重动态环境注入，二者与
+   MPBench 的记忆投毒范式存在差异，结论需谨慎外推。
+2. **AgentDojo 适配简化**：AgentDojo 适配器将注入载荷包装为单次工具返回值，未还原其
+   完整的动态环境状态机与多轮交互逻辑，适用于负载率效应的粗粒度验证。
+3. **重建数据**：`data/reconstructed/` 中的 MPBench 用例为根据论文描述重建，非官方数据
+4. **token 估算**：使用简单的字符/token 换算，非精确 tokenizer（可通过安装 tiktoken 改进）
+5. **判定方式**：默认使用子串匹配判定 ASR/RSR，非 LLM judge（可扩展）
+6. **单模型**：默认配置使用单一模型，跨模型验证需手动配置
 
 ## 引用
 
@@ -292,6 +315,13 @@ Indirect Prompt Injection (IPI) 基准测试，包含 17 个用户场景、30 �
   title={InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents},
   author={Qi, Zhuo and Chalkidis, Ilias and Singh, Amrit and others},
   booktitle={Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  year={2024}
+}
+
+@inproceedings{agentdojo2024,
+  title={AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents},
+  author={Debenedetti, Edoardo and Zhang, Jie and Balunovic, Mislav and Beurer-Kellner, Luca and Fischer, Marc and Tramer, Florian},
+  booktitle={The Thirty-eighth Conference on Neural Information Processing Systems Datasets and Benchmarks Track},
   year={2024}
 }
 ```

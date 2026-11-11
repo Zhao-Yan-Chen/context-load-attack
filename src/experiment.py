@@ -38,12 +38,15 @@ def _load_adapter(data_source: str, data_dir: str):
     if data_source == "injecagent":
         from .injecagent_adapter import InjecAgentAdapter
         return InjecAgentAdapter(data_dir)
+    elif data_source == "agentdojo":
+        from .agentdojo_adapter import AgentDojoAdapter
+        return AgentDojoAdapter(data_dir)
     elif data_source == "mpbench":
         return MPBenchAdapter(data_dir)
     else:
         raise ValueError(
             f"未知的 data_source: {data_source}。"
-            f"支持: 'mpbench', 'injecagent'。"
+            f"支持: 'mpbench', 'injecagent', 'agentdojo'。"
         )
 
 

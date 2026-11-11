@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.mpbench_adapter import MPBenchAdapter
 from src.injecagent_adapter import InjecAgentAdapter
+from src.agentdojo_adapter import AgentDojoAdapter
 from src.context_loader import FillerBank, estimate_tokens, ContextLoadConfig
 from src.evaluator import ExperimentMetrics
 
@@ -49,6 +50,32 @@ def test_injecagent_adapter():
     assert c.expected_memory_pattern, "expected_memory_pattern 为空"
     assert "<Attacker Instruction>" not in c.payload, \
         "payload 中仍存在未替换的占位符"
+    print(f"  示例 case_id: {c.case_id}")
+    print(f"  示例 attack_class: {c.attack_class}")
+    print(f"  示例 domain: {c.domain}")
+    print(f"  示例 memory_pattern: {c.expected_memory_pattern!r}")
+    print("  [PASS]")
+
+
+def test_agentdojo_adapter():
+    print("测试 AgentDojoAdapter...")
+    adapter = AgentDojoAdapter("data/agentdojo")
+    summary = adapter.summary()
+    print(f"  总用例数: {summary['total']}")
+    print(f"  攻击类型: {list(summary['by_attack_class'].keys())}")
+    print(f"  套件: {list(summary['by_suite'].keys())}")
+    assert summary["total"] > 0, "没有加载到 AgentDojo 测试用例"
+    assert len(summary["by_suite"]) >= 2, "套件数量不足"
+
+    # 检查字段完整性
+    cases = adapter.get_cases(limit=1)
+    assert len(cases) == 1
+    c = cases[0]
+    assert c.payload, "payload 为空"
+    assert c.task_description, "task_description 为空"
+    assert c.target_instruction, "target_instruction 为空"
+    assert c.expected_memory_pattern, "expected_memory_pattern 为空"
+    assert "[Tool Output" in c.payload, "payload 未包装为工具返回值"
     print(f"  示例 case_id: {c.case_id}")
     print(f"  示例 attack_class: {c.attack_class}")
     print(f"  示例 domain: {c.domain}")
@@ -113,6 +140,7 @@ def main():
 
     test_mpbench_adapter()
     test_injecagent_adapter()
+    test_agentdojo_adapter()
     test_filler_bank()
     test_context_load_config()
     test_evaluator()
