@@ -1,0 +1,21 @@
+# 模型配置
+# 支持多个模型，实验时可切换
+
+models:
+  - name: "gpt-oss-120b"
+    context_window: 128000
+    api_base: "http://localhost:8000/v1"
+    api_key: "EMPTY"
+    
+  - name: "gpt-4o"
+    context_window: 128000
+    api_base: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+    
+  - name: "claude-3-opus"
+    context_window: 200000
+    api_base: "https://api.anthropic.com/v1"
+    api_key: "${ANTHROPIC_API_KEY}"
+
+# 实验中使用的模型
+default_model: "gpt-oss-120b"
