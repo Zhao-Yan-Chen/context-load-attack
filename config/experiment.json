@@ -1,5 +1,6 @@
 {
-  "data_dir": "data/reconstructed",
+  "data_source": "injecagent",
+  "data_dir": "data/injecagent",
   "attack_classes": null,
   "domains": null,
   "signal_strength": null,

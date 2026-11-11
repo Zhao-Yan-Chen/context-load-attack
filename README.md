@@ -41,6 +41,7 @@ context-load-attack/
 │   ├── __init__.py
 │   ├── context_loader.py        # 上下文负载控制（核心）
 │   ├── mpbench_adapter.py       # MPBench 数据加载
+│   ├── injecagent_adapter.py    # InjecAgent 数据加载（替代数据集）
 │   ├── agent_runner.py          # Agent 运行器
 │   ├── evaluator.py             # ASR/RSR 计算
 │   └── experiment.py            # 实验编排
@@ -52,6 +53,10 @@ context-load-attack/
 │   │   ├── policy_conformant.json
 │   │   ├── false_precedent.json
 │   │   └── skill_procedure.json
+│   ├── injecagent/              # InjecAgent 数据集（已内置）
+│   │   ├── user_cases.jsonl
+│   │   ├── attacker_cases_dh.jsonl
+│   │   └── attacker_cases_ds.jsonl
 │   └── filler/                  # 良性填充内容（控制负载率）
 │       ├── documents.json
 │       └── code.json
@@ -119,11 +124,29 @@ python scripts/quick_test.py
 ### 3. 配置实验
 
 编辑 `config/experiment.json`，设置：
+- `data_source`：数据源（`injecagent` 或 `mpbench`）
+- `data_dir`：数据目录
 - `agent_config.api_base`：LLM API 地址
 - `agent_config.model`：模型名称
 - `agent_config.api_key`：API Key
 - `load_ratios`：要测试的负载率列表
 - `num_repeats`：每个用例的重复次数（建议 ≥ 3）
+
+#### 切换数据源
+
+```json
+// 使用 InjecAgent（默认，已内置数据）
+{
+  "data_source": "injecagent",
+  "data_dir": "data/injecagent"
+}
+
+// 使用重建的 MPBench 测试用例
+{
+  "data_source": "mpbench",
+  "data_dir": "data/reconstructed"
+}
+```
 
 ### 4. 运行实验
 
@@ -158,15 +181,46 @@ python scripts/analyze_results.py --results results/<结果文件>.json --output
 python scripts/reconstruct_mpbench.py
 ```
 
-## 使用官方 MPBench 数据
+## 数据集说明
 
-由于 MPBench 官方数据集尚未公开发布，本项目使用根据论文描述重建的测试用例。
+本项目支持多种数据源，通过 `config/experiment.json` 中的 `data_source` 字段切换。
+
+### InjecAgent（默认推荐）
+
+[InjecAgent](https://github.com/iliaschalkidis/injec-agent) 是首个针对 LLM Agent 的
+Indirect Prompt Injection (IPI) 基准测试，包含 17 个用户场景、30 个 Direct Harm 攻击
+和 32 个 Data Stealing 攻击，可组合生成 1054 个测试用例。
+
+数据已内置在 `data/injecagent/` 目录中，无需额外下载。
+
+**与 MPBench 的差异**：
+| 维度 | MPBench | InjecAgent |
+|------|---------|------------|
+| 攻击范式 | 记忆投毒（写入+检索两阶段） | 间接提示注入（工具返回值注入） |
+| 攻击类型 | 6 类（强/弱信号） | Direct Harm / Data Stealing |
+| 数据状态 | 未开源 | 已开源，已内置 |
+| 适用场景 | 记忆持久化投毒 | 单次会话指令劫持 |
+
+`src/injecagent_adapter.py` 将 InjecAgent 用例转换为统一的 `MPBenchCase` 格式，
+确保实验框架无需改动即可运行。
+
+### 重建的 MPBench 测试用例
+
+由于 MPBench 官方数据集尚未公开发布，`data/reconstructed/` 中包含根据论文描述重建的
+6 类攻击测试用例（124 条）。
 
 当官方数据发布后：
 
 1. 将数据放入 `data/mpbench/` 目录
-2. 修改 `config/experiment.json` 中的 `data_dir` 为 `data/mpbench`
+2. 修改 `config/experiment.json` 中的 `data_source` 为 `mpbench`，`data_dir` 为 `data/mpbench`
 3. 确保数据格式与 `src/mpbench_adapter.py` 中的 `MPBenchCase` 一致
+
+### 其他可选数据集
+
+以下开源数据集也可作为替代（需自行编写适配器）：
+- **AgentDojo**（github.com/ethz-spylab/agentdojo）：97 任务、629 安全用例，动态环境
+- **BIPIA**：首个 IPI 专用基准，250 个攻击者目标，5 种场景
+- **AutoDojo**（github.com/xhOwenMa/AutoDojo）：生成式 PI 防御基准
 
 ## 支持的 Agent 系统
 
@@ -215,10 +269,12 @@ python scripts/reconstruct_mpbench.py
 
 ## 局限性
 
-1. **重建数据**：使用的是根据论文描述重建的测试用例，非官方 MPBench 数据
-2. **token 估算**：使用简单的字符/token 换算，非精确 tokenizer（可通过安装 tiktoken 改进）
-3. **判定方式**：默认使用子串匹配判定 ASR/RSR，非 LLM judge（可扩展）
-4. **单模型**：默认配置使用单一模型，跨模型验证需手动配置
+1. **数据集替代**：MPBench 官方数据未开源，默认使用 InjecAgent 替代。InjecAgent 侧重
+   间接提示注入（工具返回值劫持），与 MPBench 的记忆投毒范式存在差异，结论需谨慎外推。
+2. **重建数据**：`data/reconstructed/` 中的 MPBench 用例为根据论文描述重建，非官方数据
+3. **token 估算**：使用简单的字符/token 换算，非精确 tokenizer（可通过安装 tiktoken 改进）
+4. **判定方式**：默认使用子串匹配判定 ASR/RSR，非 LLM judge（可扩展）
+5. **单模型**：默认配置使用单一模型，跨模型验证需手动配置
 
 ## 引用
 
@@ -230,6 +286,13 @@ python scripts/reconstruct_mpbench.py
   author={Dash, Pritam and Ge, Tongyu and Jain, Aditi and Shah, Tanmay and Shang, Zhiwei},
   journal={arXiv preprint arXiv:2606.04329},
   year={2026}
+}
+
+@inproceedings{injecagent2024,
+  title={InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents},
+  author={Qi, Zhuo and Chalkidis, Ilias and Singh, Amrit and others},
+  booktitle={Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  year={2024}
 }
 ```
 

@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.mpbench_adapter import MPBenchAdapter
+from src.injecagent_adapter import InjecAgentAdapter
 from src.context_loader import FillerBank, estimate_tokens, ContextLoadConfig
 from src.evaluator import ExperimentMetrics
 
@@ -23,6 +24,35 @@ def test_mpbench_adapter():
     print(f"  攻击类型: {list(summary['by_attack_class'].keys())}")
     print(f"  任务域: {list(summary['by_domain'].keys())}")
     assert summary["total"] > 0, "没有加载到测试用例"
+    print("  [PASS]")
+
+
+def test_injecagent_adapter():
+    print("测试 InjecAgentAdapter...")
+    adapter = InjecAgentAdapter("data/injecagent")
+    summary = adapter.summary()
+    print(f"  总用例数: {summary['total']}")
+    print(f"  攻击类型: {list(summary['by_attack_class'].keys())}")
+    print(f"  任务域: {list(summary['by_domain'].keys())}")
+    print(f"  攻击子类型: {list(summary['by_attack_type'].keys())}")
+    assert summary["total"] > 0, "没有加载到 InjecAgent 测试用例"
+    assert "direct_harm" in summary["by_attack_class"], "缺少 direct_harm 类"
+    assert "data_stealing" in summary["by_attack_class"], "缺少 data_stealing 类"
+
+    # 检查单个用例的字段完整性
+    cases = adapter.get_cases(limit=1)
+    assert len(cases) == 1
+    c = cases[0]
+    assert c.payload, "payload 为空"
+    assert c.task_description, "task_description 为空"
+    assert c.target_instruction, "target_instruction 为空"
+    assert c.expected_memory_pattern, "expected_memory_pattern 为空"
+    assert "<Attacker Instruction>" not in c.payload, \
+        "payload 中仍存在未替换的占位符"
+    print(f"  示例 case_id: {c.case_id}")
+    print(f"  示例 attack_class: {c.attack_class}")
+    print(f"  示例 domain: {c.domain}")
+    print(f"  示例 memory_pattern: {c.expected_memory_pattern!r}")
     print("  [PASS]")
 
 
@@ -82,6 +112,7 @@ def main():
     print("=" * 50)
 
     test_mpbench_adapter()
+    test_injecagent_adapter()
     test_filler_bank()
     test_context_load_config()
     test_evaluator()

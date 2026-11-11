@@ -33,10 +33,25 @@ from .evaluator import Evaluator
 from .mpbench_adapter import MPBenchAdapter, MPBenchCase
 
 
+def _load_adapter(data_source: str, data_dir: str):
+    """根据数据源类型加载对应的适配器"""
+    if data_source == "injecagent":
+        from .injecagent_adapter import InjecAgentAdapter
+        return InjecAgentAdapter(data_dir)
+    elif data_source == "mpbench":
+        return MPBenchAdapter(data_dir)
+    else:
+        raise ValueError(
+            f"未知的 data_source: {data_source}。"
+            f"支持: 'mpbench', 'injecagent'。"
+        )
+
+
 @dataclass
 class ExperimentConfig:
     """实验配置"""
     # 数据
+    data_source: str = "mpbench"  # mpbench / injecagent
     data_dir: str = "data/reconstructed"
     attack_classes: Optional[List[str]] = None  # None = 全部
     domains: Optional[List[str]] = None
@@ -64,7 +79,7 @@ class Experiment:
 
     def __init__(self, config: ExperimentConfig):
         self.config = config
-        self.adapter = MPBenchAdapter(config.data_dir)
+        self.adapter = _load_adapter(config.data_source, config.data_dir)
         self.evaluator = Evaluator()
 
         # 初始化 Agent 运行器
@@ -101,6 +116,7 @@ class Experiment:
         if self.config.domains:
             cases = [c for c in cases if c.domain in self.config.domains]
 
+        print(f"[INFO] 数据源: {self.config.data_source} ({self.config.data_dir})")
         print(f"[INFO] 加载 {len(cases)} 个测试用例")
         print(f"[INFO] 负载率: {self.config.load_ratios}")
         print(f"[INFO] 上下文窗口: {self.config.context_window_size} tokens")
@@ -194,6 +210,7 @@ def run_from_config(config_path: str):
         config_data = json.load(f)
 
     config = ExperimentConfig(
+        data_source=config_data.get("data_source", "mpbench"),
         data_dir=config_data.get("data_dir", "data/reconstructed"),
         attack_classes=config_data.get("attack_classes"),
         domains=config_data.get("domains"),
