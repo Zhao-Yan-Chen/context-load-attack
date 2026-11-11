@@ -92,11 +92,8 @@ class Evaluator:
     def compute_by_attack_class(self) -> Dict[str, List[ExperimentMetrics]]:
         """按攻击类型分组，再按负载率计算"""
         groups: Dict[str, Dict[float, List[AgentRunResult]]] = {}
-        # 需要从 case_id 反推 attack_class，这里简化处理
-        # 实际使用时应在 result 中保留 attack_class
         for r in self.results:
-            # 从 case_id 解析 attack_class（case_id 格式: {attack}_{domain}_{idx}）
-            attack_class = r.case_id.split("_")[0] if "_" in r.case_id else "unknown"
+            attack_class = r.attack_class or "unknown"
             groups.setdefault(attack_class, {}).setdefault(r.load_ratio, []).append(r)
 
         result = {}
@@ -120,9 +117,7 @@ class Evaluator:
         """按信号强度分组（强信号 vs 弱信号）"""
         groups: Dict[str, Dict[float, List[AgentRunResult]]] = {}
         for r in self.results:
-            signal = "strong" if any(
-                ac in r.case_id for ac in ["explicit", "conditional", "salience"]
-            ) else "weak"
+            signal = r.signal_strength or "unknown"
             groups.setdefault(signal, {}).setdefault(r.load_ratio, []).append(r)
 
         result = {}
@@ -157,6 +152,8 @@ class Evaluator:
             "raw_results": [
                 {
                     "case_id": r.case_id,
+                    "attack_class": r.attack_class,
+                    "signal_strength": r.signal_strength,
                     "load_ratio": r.load_ratio,
                     "actual_tokens": r.actual_tokens,
                     "asr_success": r.asr_success,

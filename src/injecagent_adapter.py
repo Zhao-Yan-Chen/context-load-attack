@@ -75,25 +75,16 @@ def _extract_key_phrase(text: str, max_words: int = 8) -> str:
 
     策略:
         1. 取第一个句子/子句（遇到逗号、句号、分号截断）
-        2. 去掉停用词
-        3. 保留前 max_words 个实词
+        2. 保留前 max_words 个词（保持词序与连续性以确保子串匹配）
     """
     if not text:
         return ""
 
-    # 取第一个子句
     first_clause = re.split(r"[,.;:]", text)[0].strip()
-
-    # 分词并过滤停用词
     words = re.findall(r"[A-Za-z0-9$]+", first_clause)
-    key_words = [w for w in words if w.lower() not in _STOPWORDS]
-
-    if not key_words:
-        # 如果过滤后为空，返回原始前几个词
-        key_words = words[:max_words]
-
-    phrase = " ".join(key_words[:max_words])
-    return phrase.lower()
+    if not words:
+        return ""
+    return " ".join(words[:max_words]).lower()
 
 
 class InjecAgentAdapter:

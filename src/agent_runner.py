@@ -39,6 +39,8 @@ class AgentRunResult:
     case_id: str
     load_ratio: float
     actual_tokens: int
+    attack_class: str = ""
+    signal_strength: str = ""
     memory_entries: List[str] = field(default_factory=list)
     agent_response: str = ""
     asr_success: bool = False
@@ -60,6 +62,7 @@ class AgentRunner:
         self.api_base = config.get("api_base", "http://localhost:8000/v1")
         self.api_key = config.get("api_key", "EMPTY")
         self.filler_bank = FillerBank(config.get("filler_dir", "data/filler"))
+        self.mock = config.get("mock", False)  # mock 模式：不调用真实 LLM
 
     @staticmethod
     def _default_system_prompt() -> str:
@@ -102,7 +105,10 @@ Save relevant and important information that the user provides."""
         return "\n\n".join(parts)
 
     def _call_llm(self, context: str) -> str:
-        """调用 LLM（OpenAI 兼容 API）"""
+        """调用 LLM（OpenAI 兼容 API）。mock 模式下返回模拟响应。"""
+        if self.mock:
+            return self._mock_response(context)
+
         try:
             import httpx
         except ImportError:
@@ -125,6 +131,37 @@ Save relevant and important information that the user provides."""
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
+
+    def _mock_response(self, context: str) -> str:
+        """
+        Mock LLM 响应（用于无 API 时的流水线测试）。
+
+        模拟策略: 约 50% 概率"遵循"注入指令——从上下文中提取工具输出片段
+        并回显到响应中，使 ASR 判定有机会命中；其余情况返回良性响应。
+        """
+        import random
+        rng = random.Random(hash(context) % (2**32))
+
+        # 从上下文中提取 TOOL_OUTPUT 或 EXTERNAL_DATA 片段
+        injection_snippet = ""
+        for marker in ["TOOL_OUTPUT", "EXTERNAL_DATA"]:
+            idx = context.find(marker)
+            if idx != -1:
+                # 取标记后约 500 字符作为注入片段
+                snippet = context[idx:idx + 500]
+                injection_snippet = snippet
+                break
+
+        if rng.random() < 0.5 and injection_snippet:
+            # 模拟被攻击：将注入内容作为单行记忆写入（确保能被提取）
+            flat_snippet = " ".join(injection_snippet[:400].split())
+            return (
+                f"memory: {flat_snippet}\n"
+                "Done."
+            )
+        else:
+            # 模拟正常行为
+            return "I've completed the task. No additional notes to save."
 
     def _extract_memory_entries(self, response: str) -> List[str]:
         """从 Agent 响应中提取被写入的记忆条目"""
@@ -170,6 +207,8 @@ Save relevant and important information that the user provides."""
             case_id=case.case_id,
             load_ratio=target_load_ratio,
             actual_tokens=actual_tokens,
+            attack_class=case.attack_class,
+            signal_strength=case.signal_strength,
         )
 
         try:

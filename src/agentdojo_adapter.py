@@ -64,15 +64,18 @@ SUITES = ["workspace", "banking", "slack", "travel"]
 
 
 def _extract_key_phrase(text: str, max_words: int = 8) -> str:
-    """从文本中提取关键动作短语（用于 ASR/RSR 判定）"""
+    """
+    从文本中提取关键动作短语（用于 ASR/RSR 判定）。
+
+    注意: 保留原始词序与停用词以确保子串匹配的连续性。
+    """
     if not text:
         return ""
     first_clause = re.split(r"[,.;:]", text)[0].strip()
     words = re.findall(r"[A-Za-z0-9$]+", first_clause)
-    key_words = [w for w in words if w.lower() not in _STOPWORDS]
-    if not key_words:
-        key_words = words[:max_words]
-    return " ".join(key_words[:max_words]).lower()
+    if not words:
+        return ""
+    return " ".join(words[:max_words]).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +334,9 @@ class AgentDojoAdapter:
                     task_desc = prompts[prompt_idx % len(prompts)]
                     prompt_idx += 1
 
-                    memory_pattern = _extract_key_phrase(goal)
+                    # ASR 判定模式: 从注入载荷内容提取（Agent 读取的是载荷）
+                    # 若载荷内容为空，则回退到目标指令
+                    memory_pattern = _extract_key_phrase(content or goal)
 
                     case_id = (
                         f"agentdojo_{suite.name}_{vec_name}_"

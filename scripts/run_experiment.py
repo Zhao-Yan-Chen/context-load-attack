@@ -72,6 +72,7 @@ def main():
 
     # 运行实验
     config = ExperimentConfig(
+        data_source=config_data.get("data_source", "mpbench"),
         data_dir=config_data.get("data_dir", "data/reconstructed"),
         attack_classes=config_data.get("attack_classes"),
         domains=config_data.get("domains"),

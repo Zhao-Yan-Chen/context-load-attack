@@ -119,6 +119,8 @@ def test_evaluator():
             case_id=f"policy_email_{i:03d}",
             load_ratio=0.3,
             actual_tokens=40000,
+            attack_class="policy_conformant",
+            signal_strength="weak",
             asr_success=(i % 3 == 0),
             rsr_success=(i % 6 == 0),
         )
